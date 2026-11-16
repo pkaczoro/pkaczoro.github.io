@@ -94,6 +94,11 @@ select.chip{max-width:100%;font-weight:600}
 }
 #custom p{margin:0;font-size:.8rem;color:var(--muted)}
 .rotate{font-size:.8rem;color:var(--muted)}
+body.nokb{padding-bottom:12px}
+body.nokb .rotate{display:none}
+#micLevel{display:flex;flex-direction:column;gap:3px;font-size:.75rem;color:var(--muted)}
+#micLevel .track{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+#micBar{display:block;height:100%;width:0;background:var(--good)}
 @media (min-width:560px){.rotate{display:none}}
 
 .kb-scroll{overflow-x:auto;margin:0 -16px;padding:0 16px 12px}
@@ -168,10 +173,12 @@ select.chip{max-width:100%;font-weight:600}
 <div class="controls">
   <button class="chip" id="tNames" aria-pressed="false">Nazwy klawiszy</button>
   <button class="chip" id="tSound" aria-pressed="true">Dźwięk</button>
+  <button class="chip" id="tMic" aria-pressed="false">Mikrofon</button>
   <button class="chip" id="bHint">Podpowiedź</button>
   <span class="rotate">Obróć telefon, żeby zobaczyć całą klawiaturę</span>
 </div>
 </div>
+<div id="micLevel" hidden><div class="track"><i id="micBar"></i></div><span id="micInfo"></span></div>
 <div id="custom" hidden>
   <textarea id="customText" aria-label="Nuty własnej melodii" placeholder="np. g e:8 e:8 f:2 r c2" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
   <p>Nuty literami, oddzielone spacją: c d e f g a h. Krzyżyk: cis. Wyższa oktawa: c2, niższa: c0. Długość po dwukropku: g:2 półnuta, g:8 ósemka, g:2. z kropką (bez niej ćwierćnuta). Pauza: r, r:8.</p>
@@ -494,9 +501,9 @@ select.chip{max-width:100%;font-weight:600}
   // --- gra ---
   var ok=0, err=0, streak=0;
   function flash(key,cls,ms){key.classList.add(cls);setTimeout(function(){key.classList.remove(cls);},ms);}
-  function press(key){
+  function press(key,fromMic){
     var midi=+key.dataset.midi;
-    play(midi);
+    if(!fromMic)play(midi);
     if(locked||!current||listening)return;
     if(midi===current.midi){
       ok++;streak++;
@@ -515,7 +522,7 @@ select.chip{max-width:100%;font-weight:600}
       err++;streak=0;
       flash(key,'bad',280);
       var g=curG;if(g){g.classList.add('bad');setTimeout(function(){g.classList.remove('bad');},280);}
-      say('Zagrałeś '+noteByMidi[midi].name+'. Spróbuj jeszcze raz','bad');
+      say((fromMic?'Słyszę ':'Zagrałeś ')+noteByMidi[midi].name+'. Spróbuj jeszcze raz','bad');
     }
     $('ok').textContent=ok;$('err').textContent=err;$('streak').textContent=streak;
   }
@@ -639,6 +646,106 @@ select.chip{max-width:100%;font-weight:600}
     flash(key,'hint',900);
     key.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
     say('To '+current.name);
+  });
+
+  // --- mikrofon: rozpoznawanie wysokości dźwięku z instrumentu ---
+  var micStream=null, micCtx=null, analyser=null, micBuf=null, micRaf=0;
+  var cand=-1, candCount=0, lastFired=-1, floorRms=0, armed=true, micWarned=false, micTick=0;
+  // autokorelacja: zwraca częstotliwość podstawową albo -1, gdy cisza lub szum
+  function detectPitch(buf,sr){
+    var n=buf.length, rms=0, i, j;
+    for(i=0;i<n;i++)rms+=buf[i]*buf[i];
+    rms=Math.sqrt(rms/n);
+    if(rms<0.002)return {f:-1,rms:rms};
+    var maxLag=Math.min(n-2,Math.ceil(sr/110)), c=new Float32Array(maxLag+2);
+    for(i=0;i<=maxLag+1;i++){var sum=0;for(j=0;j<n-i;j++)sum+=buf[j]*buf[j+i];c[i]=sum;}
+    var d=0;while(d<maxLag&&c[d]>c[d+1])d++;
+    var maxv=-1,maxp=-1;
+    for(i=d;i<=maxLag;i++)if(c[i]>maxv){maxv=c[i];maxp=i;}
+    if(maxp<1||maxv<0.5*c[0])return {f:-1,rms:rms};
+    // pierwszy wyraźny szczyt zamiast najwyższego: chroni przed pomyłką o oktawę w dół
+    for(i=d+1;i<maxp;i++)if(c[i]>0.9*maxv&&c[i]>=c[i-1]&&c[i]>=c[i+1]){maxp=i;break;}
+    var x1=c[maxp-1],x2=c[maxp],x3=c[maxp+1],a=(x1+x3-2*x2)/2,b=(x3-x1)/2,T=maxp;
+    if(a)T=maxp-b/(2*a);
+    return {f:sr/T,rms:rms};
+  }
+  function micLabel(t){$('tMic').textContent=t?'Mikrofon · '+t:'Mikrofon';}
+  function micLoop(){
+    micRaf=requestAnimationFrame(micLoop);
+    analyser.getFloatTimeDomainData(micBuf);
+    var r=detectPitch(micBuf,micCtx.sampleRate);
+    // wskaźnik poziomu: widać, czy dźwięk w ogóle dociera z mikrofonu
+    var lvl=Math.max(0,Math.min(1,(Math.log(r.rms+1e-6)/Math.LN10+3.3)/3));
+    $('micBar').style.width=Math.round(lvl*100)+'%';
+    if(++micTick%20===0){
+      var tr=micStream.getAudioTracks()[0];
+      $('micInfo').textContent='audio: '+micCtx.state+' · '+micCtx.sampleRate+' Hz · poziom '+r.rms.toFixed(4)+
+        ' · ścieżka: '+(tr?tr.readyState+(tr.muted?' wyciszona':''):'brak');
+    }
+    if(micCtx.state!=='running'){
+      if(!micWarned){micWarned=true;say('Dotknij ekranu, żeby uruchomić nasłuch mikrofonu','bad');}
+      return;
+    }
+    if(micWarned){micWarned=false;say('Mikrofon włączony. Zagraj nutę na instrumencie');}
+    if(r.f<0){cand=-1;candCount=0;armed=true;micLabel('');return;}
+    var mf=69+12*Math.log(r.f/440)/Math.LN2, midi=Math.round(mf);
+    if(Math.abs(mf-midi)>0.4||!keyByMidi[midi]){cand=-1;candCount=0;return;}
+    if(midi===cand)candCount++;else{cand=midi;candCount=1;}
+    micLabel(noteByMidi[midi].name);
+    if(!armed){
+      // ta sama nuta liczy się ponownie dopiero po nowym uderzeniu (skok głośności)
+      if(midi!==lastFired&&candCount>=2)armed=true;
+      else if(r.rms>floorRms*1.6)armed=true;
+      floorRms=Math.min(floorRms,r.rms);
+    }
+    var need=(current&&midi===current.midi)?3:7; // błędną nutę uznajemy dopiero, gdy brzmi dłużej
+    if(armed&&candCount>=need&&!locked&&!listening&&Date.now()>micMuteUntil){
+      armed=false;lastFired=midi;floorRms=r.rms;
+      press(keyByMidi[midi],true);
+    }
+  }
+  function micResume(){if(micCtx&&micCtx.state!=='running')try{micCtx.resume();}catch(e){}}
+  ['touchend','pointerup','click'].forEach(function(ev){document.addEventListener(ev,micResume,true);});
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)micResume();});
+  // przy włączonym mikrofonie klawiatura znika, a pięciolinia zajmuje cały ekran
+  function showKeyboard(on){
+    document.querySelector('.kb-scroll').hidden=!on;
+    document.body.classList.toggle('nokb',!on);
+    layout(true);
+  }
+  function micStop(){
+    cancelAnimationFrame(micRaf);
+    if(micStream)micStream.getTracks().forEach(function(t){t.stop();});
+    if(micCtx)try{micCtx.close();}catch(e){}
+    micStream=micCtx=analyser=null;micLabel('');$('tMic').setAttribute('aria-pressed','false');
+    showKeyboard(true);$('micLevel').hidden=true;
+  }
+  $('tMic').addEventListener('click',function(){
+    if(micStream){micStop();say('Mikrofon wyłączony');return;}
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+      say('Mikrofon niedostępny. Strona musi być otwarta przez https','bad');return;
+    }
+    var raw={audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}};
+    navigator.mediaDevices.getUserMedia(raw).catch(function(){
+      return navigator.mediaDevices.getUserMedia({audio:true}); // gdy urządzenie nie przyjmuje ustawień
+    }).then(function(stream){
+      // na iPadzie kontekst audio musi powstać dopiero po uruchomieniu mikrofonu, inaczej podaje ciszę;
+      // jeśli zostanie wstrzymany, wznawia go pierwsze dotknięcie ekranu (micResume)
+      micStream=stream;micCtx=new (window.AudioContext||window.webkitAudioContext)();
+      micResume();
+      analyser=micCtx.createAnalyser();analyser.fftSize=2048;
+      micBuf=new Float32Array(analyser.fftSize);
+      micCtx.createMediaStreamSource(stream).connect(analyser);
+      // Safari przetwarza dźwięk tylko w grafie podłączonym do wyjścia, więc podłączamy przez wyciszenie
+      var mute=micCtx.createGain();mute.gain.value=0;analyser.connect(mute);mute.connect(micCtx.destination);
+      cand=-1;candCount=0;armed=true;
+      $('tMic').setAttribute('aria-pressed','true');
+      $('micLevel').hidden=false;showKeyboard(false);
+      say('Mikrofon włączony. Zagraj nutę na instrumencie');
+      micLoop();
+    }).catch(function(e){
+      say('Mikrofon nie działa: '+(e&&e.name?e.name:e)+'. Sprawdź zgodę na mikrofon w przeglądarce','bad');
+    });
   });
 
   // --- szerokość pięciolinii dopasowana do ekranu ---
