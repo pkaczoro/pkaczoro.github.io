@@ -82,6 +82,8 @@ h1{font-family:var(--font-display);font-size:1.25rem;font-weight:700;margin:0;te
   border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;
 }
 select.chip{max-width:100%;font-weight:600}
+.chip:disabled{opacity:.4;cursor:default}
+#note g.n[data-i]{cursor:pointer}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--paper)}
 .chip:focus-visible,.key:focus-visible,.seg button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 [hidden]{display:none!important}
@@ -92,8 +94,6 @@ select.chip{max-width:100%;font-weight:600}
 }
 #custom p{margin:0;font-size:.8rem;color:var(--muted)}
 .rotate{font-size:.8rem;color:var(--muted)}
-body.nokb{padding-bottom:12px}
-body.nokb .rotate{display:none}
 @media (min-width:560px){.rotate{display:none}}
 
 .kb-scroll{overflow-x:auto;margin:0 -16px;padding:0 16px 12px}
@@ -159,13 +159,15 @@ body.nokb .rotate{display:none}
 </div>
 <div class="controls" id="cSong" hidden>
   <select class="chip" id="songSel" aria-label="Wybierz melodię"></select>
+  <button class="chip" id="bPrev" aria-label="Poprzednia strona melodii">◀</button>
+  <button class="chip" id="bNext" aria-label="Następna strona melodii">▶</button>
   <button class="chip" id="bListen" aria-pressed="false">Posłuchaj</button>
+  <button class="chip" id="bPage">Powtórz stronę</button>
   <button class="chip" id="bRestart">Od początku</button>
 </div>
 <div class="controls">
   <button class="chip" id="tNames" aria-pressed="false">Nazwy klawiszy</button>
   <button class="chip" id="tSound" aria-pressed="true">Dźwięk</button>
-  <button class="chip" id="tMic" aria-pressed="false">Mikrofon</button>
   <button class="chip" id="bHint">Podpowiedź</button>
   <span class="rotate">Obróć telefon, żeby zobaczyć całą klawiaturę</span>
 </div>
@@ -201,6 +203,16 @@ body.nokb .rotate{display:none}
     {id:'jingle',name:'Jingle Bells (refren)',ts:[4,4],bpm:150,n:'e e e:2 | e e e:2 | e g c:4. d:8 | e:1 | f f f:4. f:8 | f e e e:8 e:8 | e d d e | d:2 g:2 | e e e:2 | e e e:2 | e g c:4. d:8 | e:1 | f f f:4. f:8 | f e e e:8 e:8 | g g f d | c:1'},
     {id:'birthday',name:'Happy Birthday',ts:[3,4],pickup:1,bpm:110,n:'g:8 g:8 | a g c2 | h:2 g:8 g:8 | a g d2 | c2:2 g:8 g:8 | g2 e2 c2 | h a f2:8 f2:8 | e2 c2 d2 | c2:2.'},
     {id:'eliza',name:'Dla Elizy (początek)',ts:[3,8],pickup:0.5,bpm:66,n:'e2:16 dis2:16 | e2:16 dis2:16 e2:16 h:16 d2:16 c2:16 | a:8 r:16 c:16 e:16 a:16 | h:8 r:16 e:16 gis:16 h:16 | c2:8 r:16 e:16 e2:16 dis2:16 | e2:16 dis2:16 e2:16 h:16 d2:16 c2:16 | a:8 r:16 c:16 e:16 a:16 | h:8 r:16 e:16 c2:16 h:16 | a:4.'},
+    {id:'mary',name:'Mary miała baranka',ts:[4,4],bpm:120,n:'e d c d | e e e:2 | d d d:2 | e g g:2 | e d c d | e e e e | d d e d | c:1'},
+    {id:'hanschen',name:'Hänschen klein',ts:[4,4],bpm:120,n:'g e e:2 | f d d:2 | c d e f | g g g:2 | g e e:2 | f d d:2 | c e g g | c:1'},
+    {id:'london',name:'London Bridge',ts:[4,4],bpm:120,n:'g:4. a:8 g f | e f g:2 | d e f:2 | e f g:2 | g:4. a:8 g f | e f g:2 | d:2 g:2 | e c:2.'},
+    {id:'donald',name:'Old MacDonald',ts:[4,4],bpm:120,n:'g g g d | e e d:2 | h h a a | g:2. d | g g g d | e e d:2 | h h a a | g:1'},
+    {id:'yankee',name:'Yankee Doodle',ts:[4,4],bpm:130,n:'c c d e | c e d g0 | c c d e | c:2 h0:2 | c c d e | f e d c | h0 g0 a0 h0 | c:2 c:2'},
+    {id:'susanna',name:'Oh! Susanna',ts:[4,4],pickup:1,bpm:120,n:'c:8 d:8 | e g g:4. a:8 | g e c:4. d:8 | e e d c | d:2. c:8 d:8 | e g g:4. a:8 | g e c:4. d:8 | e e d d | c:2.'},
+    {id:'augustin',name:'O du lieber Augustin',ts:[3,4],bpm:140,n:'g:4. a:8 g:8 f:8 | e c c | d g0 g0 | e c c | g:4. a:8 g:8 f:8 | e c c | d g0 g0 | c:2. | d g0 g0 | e c c | d g0 g0 | e c c | g:4. a:8 g:8 f:8 | e c c | d g0 g0 | c:2.'},
+    {id:'row',name:'Row, Row, Row Your Boat',ts:[6,8],bpm:110,n:'c:4. c:4. | c d:8 e:4. | e d:8 e f:8 | g:2. | c2:8 c2:8 c2:8 g:8 g:8 g:8 | e:8 e:8 e:8 c:8 c:8 c:8 | g f:8 e d:8 | c:2.'},
+    {id:'grace',name:'Amazing Grace',ts:[3,4],pickup:1,bpm:90,n:'d | g:2 h:8 g:8 | h:2 a | g:2 e | d:2 d | g:2 h:8 g:8 | h:2 a | d2:2 h | d2:4. h:8 d2:8 h:8 | g:2 d | e:4. g:8 g:8 e:8 | d:2 d | g:2 h:8 g:8 | h:2 a | g:2.'},
+    {id:'menuet',name:'Menuet G-dur',ts:[3,4],bpm:110,n:'d2 g:8 a:8 h:8 c2:8 | d2 g g | e2 c2:8 d2:8 e2:8 fis2:8 | g2 g g | c2 d2:8 c2:8 h:8 a:8 | h c2:8 h:8 a:8 g:8 | fis g:8 a:8 h:8 g:8 | a:2.'},
     {id:'gama',name:'Gama C-dur',ts:[4,4],bpm:100,n:'c d e f | g a h c2 | c2 h a g | f e d c'},
     {id:'custom',name:'Własna melodia…',ts:[4,4],bpm:100,n:''}
   ];
@@ -244,7 +256,7 @@ body.nokb .rotate{display:none}
   // takty, grupy belek i znaki chromatyczne
   function buildSong(def,text){
     var p=parse(text), barLen=def.ts[0]*4/def.ts[1];
-    var groupLen=def.ts[1]===8?barLen:(def.ts[0]===4?2:1);
+    var groupLen=def.ts[1]===8?1.5:(def.ts[0]===4?2:1);
     var pos=def.pickup?barLen-def.pickup:0, bar=0, acc={};
     p.items.forEach(function(it,i){
       if(pos>=barLen-1e-6){bar++;pos=0;acc={};}
@@ -332,6 +344,8 @@ body.nokb .rotate{display:none}
     var g=el('g',{class:'n '+cls}), x=it.x;
     if(it.rest){drawRest(g,it.dur,x);noteG.appendChild(g);return g;}
     var n=it.n, y=yOf(n.step);
+    g.setAttribute('data-i',it.i);
+    g.appendChild(el('rect',{x:x-11,y:56,width:22,height:172,fill:'transparent'})); // pole dotyku
     var ledg=[];
     if(n.step===28)ledg.push(yOf(28));
     if(n.step>=40)ledg.push(yOf(40));
@@ -404,7 +418,9 @@ body.nokb .rotate{display:none}
         noteG.appendChild(el('line',{class:'final-bar',x1:VW-25.5,x2:VW-25.5,y1:70,y2:214}));
       }
     }
-    page.forEach(function(it,i){it.done=i<idx;});
+    page.forEach(function(it,i){it.done=i<idx;it.i=i;});
+    $('bPrev').disabled=!inSong||pageStart===0;
+    $('bNext').disabled=!inSong||pageStart+page.length>=song.items.length;
     // belki: sąsiednie ósemki/szesnastki z tej samej grupy
     var beams=[];
     for(var i=0;i<page.length;){
@@ -441,9 +457,10 @@ body.nokb .rotate{display:none}
   }
   function fixed(it){return it.acc?16:0;} // miejsce na krzyżyk lub kasownik, nie ściska się
   function skipRests(){while(idx<page.length&&page[idx].rest)idx++;}
-  function loadSongPage(start){
-    clearTimeout(advTimer);
-    var items=song.items, x0=start===0?112:100, avail=VW-30-x0, MIN=0.82, GAP=10;
+  var MIN=0.82, GAP=10;
+  // ile elementów od "start" mieści się na pięciolinii (całe takty)
+  function fitPage(start){
+    var items=song.items, x0=start===0?112:100, avail=VW-30-x0;
     var end=start, width=0, fix=0;
     while(end<items.length){
       var be=end, bw=0, bf=0;
@@ -458,9 +475,15 @@ body.nokb .rotate{display:none}
       }
       width+=add;fix+=bf;end=be;
     }
-    var sc=(avail-fix)/width; if(sc>1.25)sc=1; if(sc<MIN)sc=MIN;
-    var cx=x0;pageBars=[];
-    page=items.slice(start,end);
+    return {end:end,width:width,fix:fix,x0:x0,avail:avail};
+  }
+  // początki wszystkich stron melodii przy obecnej szerokości pięciolinii
+  function pageStarts(){var a=[],st=0;while(st<song.items.length){a.push(st);st=fitPage(st).end;}return a;}
+  function loadSongPage(start){
+    clearTimeout(advTimer);
+    var f=fitPage(start), sc=(f.avail-f.fix)/f.width; if(sc>1.25)sc=1; if(sc<MIN)sc=MIN;
+    var cx=f.x0;pageBars=[];
+    page=song.items.slice(start,f.end);
     page.forEach(function(it,i){
       if(i>0&&it.barStart){pageBars.push(cx+GAP*sc/2);cx+=GAP*sc;}
       it.x=cx+fixed(it)+9;cx+=fixed(it)+slot(it)*sc;
@@ -471,9 +494,9 @@ body.nokb .rotate{display:none}
   // --- gra ---
   var ok=0, err=0, streak=0;
   function flash(key,cls,ms){key.classList.add(cls);setTimeout(function(){key.classList.remove(cls);},ms);}
-  function press(key,fromMic){
+  function press(key){
     var midi=+key.dataset.midi;
-    if(!fromMic)play(midi);
+    play(midi);
     if(locked||!current||listening)return;
     if(midi===current.midi){
       ok++;streak++;
@@ -492,7 +515,7 @@ body.nokb .rotate{display:none}
       err++;streak=0;
       flash(key,'bad',280);
       var g=curG;if(g){g.classList.add('bad');setTimeout(function(){g.classList.remove('bad');},280);}
-      say((fromMic?'Słyszę ':'Zagrałeś ')+noteByMidi[midi].name+'. Spróbuj jeszcze raz','bad');
+      say('Zagrałeś '+noteByMidi[midi].name+'. Spróbuj jeszcze raz','bad');
     }
     $('ok').textContent=ok;$('err').textContent=err;$('streak').textContent=streak;
   }
@@ -501,18 +524,18 @@ body.nokb .rotate{display:none}
   });
 
   // --- odsłuch melodii w rytmie ---
-  var listening=false, listenTimer=null;
+  var listening=false, listenTimer=null, listenFrom=0;
   function stopListen(){
     listening=false;clearTimeout(listenTimer);$('bListen').setAttribute('aria-pressed','false');$('bListen').textContent='Posłuchaj';
   }
   function startListen(){
     if(!song||!song.items.length)return;
     listening=true;$('bListen').setAttribute('aria-pressed','true');$('bListen').textContent='Zatrzymaj';
-    loadSongPage(0);idx=0;draw();
+    listenFrom=pageStart;loadSongPage(listenFrom);idx=0;draw();
     (function step(){
       if(!listening)return;
       if(idx>=page.length){
-        if(pageStart+page.length>=song.items.length){stopListen();loadSongPage(0);say('Teraz Twoja kolej');return;}
+        if(pageStart+page.length>=song.items.length){stopListen();loadSongPage(listenFrom);say('Teraz Twoja kolej');return;}
         loadSongPage(pageStart+page.length);idx=0;
       }
       var it=page[idx];
@@ -522,9 +545,37 @@ body.nokb .rotate{display:none}
     })();
   }
   $('bListen').addEventListener('click',function(){
-    if(listening){stopListen();loadSongPage(0);}else startListen();
+    if(listening){stopListen();loadSongPage(listenFrom);}else startListen();
   });
-  $('bRestart').addEventListener('click',function(){stopListen();if(song&&song.items.length)loadSongPage(0);say('Od początku');});
+  $('bRestart').addEventListener('click',function(){stopListen();if(song&&song.items.length)loadSongPage(0);say('Melodia od początku');});
+  $('bPage').addEventListener('click',function(){stopListen();if(song&&song.items.length)loadSongPage(pageStart);say('Strona od początku');});
+  $('bNext').addEventListener('click',function(){
+    stopListen();
+    if(song&&pageStart+page.length<song.items.length)loadSongPage(pageStart+page.length);
+  });
+  $('bPrev').addEventListener('click',function(){
+    stopListen();if(!song||!song.items.length)return;
+    var prev=0;pageStarts().forEach(function(st){if(st<pageStart)prev=st;});
+    loadSongPage(prev);
+  });
+
+  // --- dotknięcie nuty: pokazuje jej nazwę i ją gra ---
+  var micMuteUntil=0; // mikrofon ma nie zaliczać dźwięku, który strona sama zagrała
+  function durName(it){
+    var d=it.dot?it.dur/1.5:it.dur;
+    var nm=d>=4?'cała nuta':d>=2?'półnuta':d>=1?'ćwierćnuta':d>=0.5?'ósemka':'szesnastka';
+    return nm+(it.dot?' z kropką':'');
+  }
+  noteG.addEventListener('click',function(e){
+    var g=e.target.closest('g.n[data-i]');if(!g||listening)return;
+    var it=page[+g.getAttribute('data-i')];if(!it||it.rest)return;
+    micMuteUntil=Date.now()+1300;
+    play(it.n.midi);
+    var key=keyByMidi[it.n.midi];
+    flash(key,'hint',700);
+    key.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+    say('To '+it.n.name+(mode==='song'?', '+durName(it):''));
+  });
 
   // --- wybór melodii ---
   var sel=$('songSel');
@@ -588,87 +639,6 @@ body.nokb .rotate{display:none}
     flash(key,'hint',900);
     key.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
     say('To '+current.name);
-  });
-
-  // --- mikrofon: rozpoznawanie wysokości dźwięku z instrumentu ---
-  var micStream=null, micCtx=null, analyser=null, micBuf=null, micRaf=0;
-  var cand=-1, candCount=0, lastFired=-1, floorRms=0, armed=true;
-  // autokorelacja: zwraca częstotliwość podstawową albo -1, gdy cisza lub szum
-  function detectPitch(buf,sr){
-    var n=buf.length, rms=0, i, j;
-    for(i=0;i<n;i++)rms+=buf[i]*buf[i];
-    rms=Math.sqrt(rms/n);
-    if(rms<0.012)return {f:-1,rms:rms};
-    var maxLag=Math.min(n-2,Math.ceil(sr/110)), c=new Float32Array(maxLag+2);
-    for(i=0;i<=maxLag+1;i++){var sum=0;for(j=0;j<n-i;j++)sum+=buf[j]*buf[j+i];c[i]=sum;}
-    var d=0;while(d<maxLag&&c[d]>c[d+1])d++;
-    var maxv=-1,maxp=-1;
-    for(i=d;i<=maxLag;i++)if(c[i]>maxv){maxv=c[i];maxp=i;}
-    if(maxp<1||maxv<0.5*c[0])return {f:-1,rms:rms};
-    // pierwszy wyraźny szczyt zamiast najwyższego: chroni przed pomyłką o oktawę w dół
-    for(i=d+1;i<maxp;i++)if(c[i]>0.9*maxv&&c[i]>=c[i-1]&&c[i]>=c[i+1]){maxp=i;break;}
-    var x1=c[maxp-1],x2=c[maxp],x3=c[maxp+1],a=(x1+x3-2*x2)/2,b=(x3-x1)/2,T=maxp;
-    if(a)T=maxp-b/(2*a);
-    return {f:sr/T,rms:rms};
-  }
-  function micLabel(t){$('tMic').textContent=t?'Mikrofon · '+t:'Mikrofon';}
-  function micLoop(){
-    micRaf=requestAnimationFrame(micLoop);
-    analyser.getFloatTimeDomainData(micBuf);
-    var r=detectPitch(micBuf,micCtx.sampleRate);
-    if(r.f<0){cand=-1;candCount=0;armed=true;micLabel('');return;}
-    var mf=69+12*Math.log(r.f/440)/Math.LN2, midi=Math.round(mf);
-    if(Math.abs(mf-midi)>0.4||!keyByMidi[midi]){cand=-1;candCount=0;return;}
-    if(midi===cand)candCount++;else{cand=midi;candCount=1;}
-    micLabel(noteByMidi[midi].name);
-    if(!armed){
-      // ta sama nuta liczy się ponownie dopiero po nowym uderzeniu (skok głośności)
-      if(midi!==lastFired&&candCount>=2)armed=true;
-      else if(r.rms>floorRms*1.6)armed=true;
-      floorRms=Math.min(floorRms,r.rms);
-    }
-    var need=(current&&midi===current.midi)?3:7; // błędną nutę uznajemy dopiero, gdy brzmi dłużej
-    if(armed&&candCount>=need&&!locked&&!listening){
-      armed=false;lastFired=midi;floorRms=r.rms;
-      press(keyByMidi[midi],true);
-    }
-  }
-  // przy włączonym mikrofonie klawiatura znika, a pięciolinia zajmuje cały ekran
-  function showKeyboard(on){
-    document.querySelector('.kb-scroll').hidden=!on;
-    document.body.classList.toggle('nokb',!on);
-    layout(true);
-  }
-  function micStop(){
-    cancelAnimationFrame(micRaf);
-    if(micStream)micStream.getTracks().forEach(function(t){t.stop();});
-    if(micCtx)try{micCtx.close();}catch(e){}
-    micStream=micCtx=analyser=null;micLabel('');$('tMic').setAttribute('aria-pressed','false');
-    showKeyboard(true);
-  }
-  $('tMic').addEventListener('click',function(){
-    if(micStream){micStop();say('Mikrofon wyłączony');return;}
-    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-      say('Mikrofon niedostępny. Strona musi być otwarta przez https','bad');return;
-    }
-    // kontekst audio tworzymy od razu w kliknięciu, inaczej Safari na iPadzie go nie uruchomi
-    var actx=new (window.AudioContext||window.webkitAudioContext)();
-    if(actx.state==='suspended')actx.resume();
-    navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}).then(function(stream){
-      micStream=stream;micCtx=actx;
-      if(micCtx.state==='suspended')micCtx.resume();
-      analyser=micCtx.createAnalyser();analyser.fftSize=2048;
-      micBuf=new Float32Array(analyser.fftSize);
-      micCtx.createMediaStreamSource(stream).connect(analyser);
-      cand=-1;candCount=0;armed=true;
-      $('tMic').setAttribute('aria-pressed','true');
-      showKeyboard(false);
-      say('Mikrofon włączony. Zagraj nutę na instrumencie');
-      micLoop();
-    }).catch(function(){
-      try{actx.close();}catch(e){}
-      say('Nie udało się włączyć mikrofonu. Sprawdź zgodę na mikrofon w przeglądarce','bad');
-    });
   });
 
   // --- szerokość pięciolinii dopasowana do ekranu ---
