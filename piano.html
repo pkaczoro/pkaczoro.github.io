@@ -92,6 +92,8 @@ select.chip{max-width:100%;font-weight:600}
 }
 #custom p{margin:0;font-size:.8rem;color:var(--muted)}
 .rotate{font-size:.8rem;color:var(--muted)}
+body.nokb{padding-bottom:12px}
+body.nokb .rotate{display:none}
 @media (min-width:560px){.rotate{display:none}}
 
 .kb-scroll{overflow-x:auto;margin:0 -16px;padding:0 16px 12px}
@@ -631,11 +633,18 @@ select.chip{max-width:100%;font-weight:600}
       press(keyByMidi[midi],true);
     }
   }
+  // przy włączonym mikrofonie klawiatura znika, a pięciolinia zajmuje cały ekran
+  function showKeyboard(on){
+    document.querySelector('.kb-scroll').hidden=!on;
+    document.body.classList.toggle('nokb',!on);
+    layout(true);
+  }
   function micStop(){
     cancelAnimationFrame(micRaf);
     if(micStream)micStream.getTracks().forEach(function(t){t.stop();});
     if(micCtx)try{micCtx.close();}catch(e){}
     micStream=micCtx=analyser=null;micLabel('');$('tMic').setAttribute('aria-pressed','false');
+    showKeyboard(true);
   }
   $('tMic').addEventListener('click',function(){
     if(micStream){micStop();say('Mikrofon wyłączony');return;}
@@ -653,6 +662,7 @@ select.chip{max-width:100%;font-weight:600}
       micCtx.createMediaStreamSource(stream).connect(analyser);
       cand=-1;candCount=0;armed=true;
       $('tMic').setAttribute('aria-pressed','true');
+      showKeyboard(false);
       say('Mikrofon włączony. Zagraj nutę na instrumencie');
       micLoop();
     }).catch(function(){
