@@ -94,7 +94,8 @@ select.chip{max-width:100%;font-weight:600}
 .rotate{font-size:.8rem;color:var(--muted)}
 body.nokb{padding-bottom:12px}
 body.nokb .rotate{display:none}
-#micLevel{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+#micLevel{display:flex;flex-direction:column;gap:3px;font-size:.75rem;color:var(--muted)}
+#micLevel .track{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
 #micBar{display:block;height:100%;width:0;background:var(--good)}
 @media (min-width:560px){.rotate{display:none}}
 
@@ -172,7 +173,7 @@ body.nokb .rotate{display:none}
   <span class="rotate">Obróć telefon, żeby zobaczyć całą klawiaturę</span>
 </div>
 </div>
-<div id="micLevel" hidden aria-hidden="true"><i id="micBar"></i></div>
+<div id="micLevel" hidden><div class="track"><i id="micBar"></i></div><span id="micInfo"></span></div>
 <div id="custom" hidden>
   <textarea id="customText" aria-label="Nuty własnej melodii" placeholder="np. g e:8 e:8 f:2 r c2" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
   <p>Nuty literami, oddzielone spacją: c d e f g a h. Krzyżyk: cis. Wyższa oktawa: c2, niższa: c0. Długość po dwukropku: g:2 półnuta, g:8 ósemka, g:2. z kropką (bez niej ćwierćnuta). Pauza: r, r:8.</p>
@@ -595,7 +596,7 @@ body.nokb .rotate{display:none}
 
   // --- mikrofon: rozpoznawanie wysokości dźwięku z instrumentu ---
   var micStream=null, micCtx=null, analyser=null, micBuf=null, micRaf=0;
-  var cand=-1, candCount=0, lastFired=-1, floorRms=0, armed=true, micWarned=false;
+  var cand=-1, candCount=0, lastFired=-1, floorRms=0, armed=true, micWarned=false, micTick=0;
   // autokorelacja: zwraca częstotliwość podstawową albo -1, gdy cisza lub szum
   function detectPitch(buf,sr){
     var n=buf.length, rms=0, i, j;
@@ -622,6 +623,11 @@ body.nokb .rotate{display:none}
     // wskaźnik poziomu: widać, czy dźwięk w ogóle dociera z mikrofonu
     var lvl=Math.max(0,Math.min(1,(Math.log(r.rms+1e-6)/Math.LN10+3.3)/3));
     $('micBar').style.width=Math.round(lvl*100)+'%';
+    if(++micTick%20===0){
+      var tr=micStream.getAudioTracks()[0];
+      $('micInfo').textContent='audio: '+micCtx.state+' · '+micCtx.sampleRate+' Hz · poziom '+r.rms.toFixed(4)+
+        ' · ścieżka: '+(tr?tr.readyState+(tr.muted?' wyciszona':''):'brak');
+    }
     if(micCtx.state!=='running'){
       if(!micWarned){micWarned=true;say('Dotknij ekranu, żeby uruchomić nasłuch mikrofonu','bad');}
       return;
@@ -665,12 +671,14 @@ body.nokb .rotate{display:none}
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
       say('Mikrofon niedostępny. Strona musi być otwarta przez https','bad');return;
     }
-    // kontekst audio tworzymy od razu w kliknięciu, inaczej Safari na iPadzie go nie uruchomi
-    var actx=new (window.AudioContext||window.webkitAudioContext)();
-    if(actx.state==='suspended')actx.resume();
-    navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}).then(function(stream){
-      micStream=stream;micCtx=actx;
-      if(micCtx.state==='suspended')micCtx.resume();
+    var raw={audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}};
+    navigator.mediaDevices.getUserMedia(raw).catch(function(){
+      return navigator.mediaDevices.getUserMedia({audio:true}); // gdy urządzenie nie przyjmuje ustawień
+    }).then(function(stream){
+      // na iPadzie kontekst audio musi powstać dopiero po uruchomieniu mikrofonu, inaczej podaje ciszę;
+      // jeśli zostanie wstrzymany, wznawia go pierwsze dotknięcie ekranu (micResume)
+      micStream=stream;micCtx=new (window.AudioContext||window.webkitAudioContext)();
+      micResume();
       analyser=micCtx.createAnalyser();analyser.fftSize=2048;
       micBuf=new Float32Array(analyser.fftSize);
       micCtx.createMediaStreamSource(stream).connect(analyser);
@@ -681,9 +689,8 @@ body.nokb .rotate{display:none}
       $('micLevel').hidden=false;showKeyboard(false);
       say('Mikrofon włączony. Zagraj nutę na instrumencie');
       micLoop();
-    }).catch(function(){
-      try{actx.close();}catch(e){}
-      say('Nie udało się włączyć mikrofonu. Sprawdź zgodę na mikrofon w przeglądarce','bad');
+    }).catch(function(e){
+      say('Mikrofon nie działa: '+(e&&e.name?e.name:e)+'. Sprawdź zgodę na mikrofon w przeglądarce','bad');
     });
   });
 
