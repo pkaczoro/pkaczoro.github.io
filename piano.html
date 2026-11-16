@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Czytanie nut na pianinie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
+<style>
+/* Układ: jeden ekran. Góra: wynik i pięciolinia (kartka nutowa), dół: klawiatura 3 oktawy. */
+:root{
+  --bg:#e9edf2;
+  --paper:#fbfcfd;
+  --ink:#18222e;
+  --muted:#5d6b7b;
+  --line:#c5cdd7;
+  --accent:#2457d6;
+  --good:#1f9d61;
+  --bad:#d43d3d;
+  --key-white:#ffffff;
+  --key-black:#1b222b;
+  --key-edge:#aab3bf;
+  --font-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --font-body:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#10151c;--paper:#1a212b;--ink:#e8edf3;--muted:#96a3b3;--line:#3a4553;
+    --accent:#7ea2ff;--good:#3fc587;--bad:#ff6b6b;
+    --key-white:#e9edf2;--key-black:#0b0e12;--key-edge:#4a5564;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#10151c;--paper:#1a212b;--ink:#e8edf3;--muted:#96a3b3;--line:#3a4553;
+  --accent:#7ea2ff;--good:#3fc587;--bad:#ff6b6b;
+  --key-white:#e9edf2;--key-black:#0b0e12;--key-edge:#4a5564;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--font-body);
+  display:flex;flex-direction:column;gap:8px;padding:12px 16px 0;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap}
+h1{font-family:var(--font-display);font-size:1.25rem;font-weight:700;margin:0;text-wrap:balance}
+.stats{display:flex;gap:14px;font-variant-numeric:tabular-nums;font-size:.9rem;color:var(--muted)}
+.stats b{color:var(--ink);font-family:var(--font-display);font-size:1.05rem}
+.stats .ok b{color:var(--good)}
+.stats .err b{color:var(--bad)}
+
+.seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--paper)}
+.seg button{font:inherit;font-size:.9rem;font-weight:600;color:var(--ink);background:none;border:0;padding:8px 16px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--paper)}
+
+.sheet{
+  flex:1 1 0;min-height:150px;background:var(--paper);border:1px solid var(--line);
+  border-radius:10px;display:flex;flex-direction:column;align-items:center;padding:6px 8px 8px;
+}
+.sheet svg{flex:1 1 0;min-height:0;width:100%}
+#prog{min-height:1.2em;font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.staff-line{stroke:var(--ink);stroke-width:1;opacity:.75}
+.final-bar{stroke:var(--ink);stroke-width:3}
+.clef{stroke:var(--ink);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.clef-fill{fill:var(--ink)}
+.ts{fill:var(--ink);font:700 27px Georgia,"Times New Roman",serif}
+#note g.n{color:var(--ink);transition:color .12s}
+#note g.n.cur{color:var(--accent)}
+#note g.n.done{color:var(--good)}
+#note g.n.good{color:var(--good)}
+#note g.n.bad{color:var(--bad)}
+#msg{min-height:1.3em;font-size:.95rem;color:var(--muted);text-align:center}
+#msg.good{color:var(--good)}
+#msg.bad{color:var(--bad)}
+
+.controls,.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ctl>.controls{display:contents}
+.chip,select.chip{
+  font:inherit;font-size:.85rem;color:var(--ink);background:var(--paper);
+  border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;
+}
+select.chip{max-width:100%;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+.chip:focus-visible,.key:focus-visible,.seg button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+#custom{display:flex;flex-direction:column;gap:6px}
+#custom textarea{
+  font:inherit;font-size:.95rem;width:100%;min-height:3.2em;resize:vertical;border:1px solid var(--line);
+  border-radius:8px;padding:8px;background:var(--paper);color:var(--ink);-webkit-user-select:text;user-select:text;
+}
+#custom p{margin:0;font-size:.8rem;color:var(--muted)}
+.rotate{font-size:.8rem;color:var(--muted)}
+@media (min-width:560px){.rotate{display:none}}
+
+.kb-scroll{overflow-x:auto;margin:0 -16px;padding:0 16px 12px}
+.kb{position:relative;display:flex;min-width:546px;height:clamp(120px,28vh,220px)}
+.key{font:inherit;padding:0;cursor:pointer;touch-action:pan-x}
+.white{
+  flex:1 1 0;background:var(--key-white);border:1px solid var(--key-edge);border-left-width:0;
+  border-radius:0 0 6px 6px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  padding-bottom:8px;color:#4a5564;font-size:.72rem;font-weight:600;gap:4px;
+}
+.white:first-child{border-left-width:1px}
+.black{
+  position:absolute;top:0;height:62%;width:3%;transform:translateX(-50%);
+  background:var(--key-black);border:1px solid var(--key-black);border-radius:0 0 4px 4px;z-index:1;
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.kb:not(.names) .lbl{visibility:hidden}
+.key.good{background:var(--good)!important;color:#fff}
+.key.bad{background:var(--bad)!important;color:#fff}
+.key.hint{background:var(--accent)!important;color:#fff}
+@media (prefers-reduced-motion:reduce){#note g.n{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Czytanie nut</h1>
+  <div class="seg" role="group" aria-label="Tryb">
+    <button id="mRandom" aria-pressed="true">Losowe nuty</button>
+    <button id="mSong" aria-pressed="false">Melodie</button>
+  </div>
+  <div class="stats">
+    <span class="ok">Trafione <b id="ok">0</b></span>
+    <span class="err">Błędy <b id="err">0</b></span>
+    <span>Seria <b id="streak">0</b></span>
+  </div>
+</header>
+
+<section class="sheet" aria-label="Pięciolinia">
+  <div id="prog"></div>
+  <svg id="staff" viewBox="0 40 400 192" role="img" aria-label="Nuty do zagrania">
+    <g id="lines"></g>
+    <line class="staff-line" x1="24" y1="70" x2="24" y2="214"/>
+    <line class="staff-line" id="endBar" x1="376" y1="70" x2="376" y2="214"/>
+    <!-- klucz wiolinowy -->
+    <path class="clef" d="M62 111C58 111 56 104 62 101C69 98 75 105 73 111C71 119 60 121 53 116C45 110 47 97 55 88C61 81 70 72 71 60C72 50 67 43 63 47C58 52 59 62 60 68L68 130C70 140 60 143 56 136"/>
+    <circle class="clef-fill" cx="57.5" cy="135" r="3.2"/>
+    <!-- klucz basowy -->
+    <path class="clef" d="M49 178C49 168 64 163 70 172C76 182 68 198 46 208"/>
+    <circle class="clef-fill" cx="50" cy="178" r="4"/>
+    <circle class="clef-fill" cx="81" cy="172" r="2.6"/>
+    <circle class="clef-fill" cx="81" cy="184" r="2.6"/>
+    <g id="note"></g>
+  </svg>
+  <div id="msg" aria-live="polite">Graj nuty po kolei. Niebieska to ta do zagrania</div>
+</section>
+
+<div class="ctl">
+<div class="controls" id="cRandom">
+  <button class="chip oct" id="tOct3" data-oct="3" aria-pressed="true">C3–H3 (basowy)</button>
+  <button class="chip oct" id="tOct4" data-oct="4" aria-pressed="true">C4–H4</button>
+  <button class="chip oct" id="tOct5" data-oct="5" aria-pressed="true">C5–H5</button>
+  <button class="chip" id="tSharps" aria-pressed="false">Krzyżyki ♯</button>
+</div>
+<div class="controls" id="cSong" hidden>
+  <select class="chip" id="songSel" aria-label="Wybierz melodię"></select>
+  <button class="chip" id="bListen" aria-pressed="false">Posłuchaj</button>
+  <button class="chip" id="bRestart">Od początku</button>
+</div>
+<div class="controls">
+  <button class="chip" id="tNames" aria-pressed="false">Nazwy klawiszy</button>
+  <button class="chip" id="tSound" aria-pressed="true">Dźwięk</button>
+  <button class="chip" id="tMic" aria-pressed="false">Mikrofon</button>
+  <button class="chip" id="bHint">Podpowiedź</button>
+  <span class="rotate">Obróć telefon, żeby zobaczyć całą klawiaturę</span>
+</div>
+</div>
+<div id="custom" hidden>
+  <textarea id="customText" aria-label="Nuty własnej melodii" placeholder="np. g e:8 e:8 f:2 r c2" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
+  <p>Nuty literami, oddzielone spacją: c d e f g a h. Krzyżyk: cis. Wyższa oktawa: c2, niższa: c0. Długość po dwukropku: g:2 półnuta, g:8 ósemka, g:2. z kropką (bez niej ćwierćnuta). Pauza: r, r:8.</p>
+  <div class="controls"><button class="chip" id="bSaveCustom">Zapisz i graj</button></div>
+</div>
+
+<div class="kb-scroll"><div class="kb" id="kb" aria-label="Klawiatura, 3 oktawy od C3 do H5"></div></div>
+
+<script>
+(function(){
+  var NS='http://www.w3.org/2000/svg';
+  var LETTERS=['C','D','E','F','G','A','H'];
+  var SEMI=[0,2,4,5,7,9,11];
+  var HAS_SHARP=[1,1,0,1,1,1,0];
+  var FIRST_OCT=3, OCTS=3, BASE_MIDI=48;
+
+  // Zapis: c = oktawa środkowa (C4), c2 = wyżej, c0 = niżej. Po dwukropku długość:
+  // 1 cała, 2 półnuta, 4 ćwierćnuta (domyślnie), 8 ósemka, 16 szesnastka, kropka wydłuża o połowę.
+  // r = pauza. "|" tylko dla czytelności, takty liczą się same z metrum (ts) i przedtaktu (pickup, w ćwierćnutach).
+  var REF='h h h r:8 g:8 | c2:8 c2:8 c2:8 c2:8 c2 r:8 g:8 | h:8 h:8 h:8 h:8 h:8 g:8 a:8 h:8 | c2 c2 c2 r';
+  var SONGS=[
+    {id:'karuzela',name:'Karuzela',ts:[4,4],bpm:112,n:'g g:8 g:8 g g | a:8 g:8 f:8 a:8 g r | a:8 g:8 f:8 e:8 f f | g:8 f:8 e:8 d:8 e e | g g:8 g:8 g g:8 g:8 | a:8 g:8 f:8 a:8 g r:8 g:8 | '+REF+' | '+REF},
+    {id:'janie',name:'Panie Janie',ts:[4,4],bpm:112,n:'c d e c | c d e c | e f g:2 | e f g:2 | g:8 a:8 g:8 f:8 e c | g:8 a:8 g:8 f:8 e c | c g0 c:2 | c g0 c:2'},
+    {id:'stolat',name:'Sto lat',ts:[3,4],bpm:132,n:'g:2 e | g:2 e | g a g | f e f | f:2 d | f:2 d | f g f | e d e | g g e | g g e | g c2 h | a g a | h:2. | h:2 h | c2:2.'},
+    {id:'kurki',name:'Wyszły w pole kurki trzy',ts:[4,4],bpm:112,n:'c c g g | a a g:2 | f f e e | d d c:2 | g g f f | e e d d | g g f f | e e d d | c c g g | a a g:2 | f f e e | d d c:2'},
+    {id:'kotek',name:'Wlazł kotek na płotek',ts:[3,4],bpm:120,n:'g e e | f d d | c:8 e:8 g:2 | g e e | f d d | c:8 e:8 c:2 | g e e | f d d | c:8 e:8 g:2 | g e e | f d d | c:8 e:8 c:2'},
+    {id:'oda',name:'Oda do radości',ts:[4,4],bpm:120,n:'e e f g | g f e d | c c d e | e:4. d:8 d:2 | e e f g | g f e d | c c d e | d:4. c:8 c:2 | d d e c | d e:8 f:8 e c | d e:8 f:8 e d | c d g0:2 | e e f g | g f e d | c c d e | d:4. c:8 c:2'},
+    {id:'cicha',name:'Cicha noc',ts:[3,4],bpm:92,n:'g:4. a:8 g | e:2. | g:4. a:8 g | e:2. | d2:2 d2 | h:2. | c2:2 c2 | g:2. | a:2 a | c2:4. h:8 a | g:4. a:8 g | e:2. | a:2 a | c2:4. h:8 a | g:4. a:8 g | e:2. | d2:2 d2 | f2:4. d2:8 h | c2:2. | e2:2. | c2 g e | g:4. f:8 d | c:2.'},
+    {id:'jingle',name:'Jingle Bells (refren)',ts:[4,4],bpm:150,n:'e e e:2 | e e e:2 | e g c:4. d:8 | e:1 | f f f:4. f:8 | f e e e:8 e:8 | e d d e | d:2 g:2 | e e e:2 | e e e:2 | e g c:4. d:8 | e:1 | f f f:4. f:8 | f e e e:8 e:8 | g g f d | c:1'},
+    {id:'birthday',name:'Happy Birthday',ts:[3,4],pickup:1,bpm:110,n:'g:8 g:8 | a g c2 | h:2 g:8 g:8 | a g d2 | c2:2 g:8 g:8 | g2 e2 c2 | h a f2:8 f2:8 | e2 c2 d2 | c2:2.'},
+    {id:'eliza',name:'Dla Elizy (początek)',ts:[3,8],pickup:0.5,bpm:66,n:'e2:16 dis2:16 | e2:16 dis2:16 e2:16 h:16 d2:16 c2:16 | a:8 r:16 c:16 e:16 a:16 | h:8 r:16 e:16 gis:16 h:16 | c2:8 r:16 e:16 e2:16 dis2:16 | e2:16 dis2:16 e2:16 h:16 d2:16 c2:16 | a:8 r:16 c:16 e:16 a:16 | h:8 r:16 e:16 c2:16 h:16 | a:4.'},
+    {id:'gama',name:'Gama C-dur',ts:[4,4],bpm:100,n:'c d e f | g a h c2 | c2 h a g | f e d c'},
+    {id:'custom',name:'Własna melodia…',ts:[4,4],bpm:100,n:''}
+  ];
+
+  function el(name,attrs){var e=document.createElementNS(NS,name);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
+  function $(id){return document.getElementById(id);}
+
+  // --- pięciolinia ---
+  var lines=$('lines');
+  [70,82,94,106,118,166,178,190,202,214].forEach(function(y){
+    lines.appendChild(el('line',{class:'staff-line',x1:24,x2:376,y1:y,y2:y}));
+  });
+  // step = oktawa*7 + litera; C4 = 28
+  function yOf(step){return step>=28 ? 118-(step-30)*6 : 166-(step-26)*6;}
+
+  // --- wszystkie nuty ---
+  var notes=[], noteByMidi={};
+  for(var o=0;o<OCTS;o++)for(var l=0;l<7;l++){
+    var oct=FIRST_OCT+o, step=oct*7+l, midi=BASE_MIDI+o*12+SEMI[l];
+    notes.push({midi:midi,step:step,sharp:false,name:LETTERS[l]+oct});
+    if(HAS_SHARP[l])notes.push({midi:midi+1,step:step,sharp:true,name:LETTERS[l]+'is'+oct});
+  }
+  notes.forEach(function(n){noteByMidi[n.midi]=n;});
+
+  // zapis literowy -> lista elementów {n, rest, dur (w ćwierćnutach), dot}
+  function parse(text){
+    var items=[], bad=[];
+    text.replace(/[,;\n]/g,' ').split(/\s+/).forEach(function(tok){
+      if(!tok||tok==='|'||tok==='/')return;
+      var m=/^(?:(r)|([cdefgah])(is|#)?([012])?)(?::(1|2|4|8|16)(\.)?)?$/i.exec(tok);
+      if(!m){bad.push(tok);return;}
+      var dur=4/(m[5]?+m[5]:4), dot=!!m[6]; if(dot)dur*=1.5;
+      if(m[1]){items.push({rest:true,n:null,dur:dur,dot:dot});return;}
+      var li=LETTERS.indexOf(m[2].toUpperCase());
+      if(m[3]&&!HAS_SHARP[li]){bad.push(tok);return;}
+      var oc=m[4]===undefined?1:+m[4];
+      items.push({rest:false,n:noteByMidi[BASE_MIDI+oc*12+SEMI[li]+(m[3]?1:0)],dur:dur,dot:dot});
+    });
+    return {items:items,bad:bad};
+  }
+  // takty, grupy belek i znaki chromatyczne
+  function buildSong(def,text){
+    var p=parse(text), barLen=def.ts[0]*4/def.ts[1];
+    var groupLen=def.ts[1]===8?barLen:(def.ts[0]===4?2:1);
+    var pos=def.pickup?barLen-def.pickup:0, bar=0, acc={};
+    p.items.forEach(function(it,i){
+      if(pos>=barLen-1e-6){bar++;pos=0;acc={};}
+      it.bar=bar;it.barStart=i===0||pos===0;
+      it.beamKey=(!it.rest&&it.dur<1)?bar*100+Math.floor(pos/groupLen+1e-6):null;
+      it.acc=null;
+      if(!it.rest){
+        var st=acc[it.n.step];
+        if(it.n.sharp&&st!=='s'){it.acc='sharp';acc[it.n.step]='s';}
+        else if(!it.n.sharp&&st==='s'){it.acc='natural';acc[it.n.step]='n';}
+      }
+      pos+=it.dur;
+    });
+    return {name:def.id==='custom'?'Własna melodia':def.name,ts:def.ts,bpm:def.bpm,items:p.items,bars:bar+1,bad:p.bad};
+  }
+
+  // --- klawiatura ---
+  var kb=$('kb'), keyByMidi={}, W=OCTS*7;
+  for(var i=0;i<W;i++){
+    var l2=i%7, o2=Math.floor(i/7), m=BASE_MIDI+o2*12+SEMI[l2];
+    var b=document.createElement('button');
+    b.className='key white';b.dataset.midi=m;
+    b.setAttribute('aria-label',LETTERS[l2]+(FIRST_OCT+o2));
+    b.innerHTML=(m===60?'<span class="dot" title="Środkowe C"></span>':'')+'<span class="lbl">'+LETTERS[l2]+(l2===0?(FIRST_OCT+o2):'')+'</span>';
+    kb.appendChild(b);keyByMidi[m]=b;
+  }
+  for(var j=0;j<W;j++){
+    var l3=j%7; if(!HAS_SHARP[l3])continue;
+    var m3=BASE_MIDI+Math.floor(j/7)*12+SEMI[l3]+1;
+    var k=document.createElement('button');
+    k.className='key black';k.dataset.midi=m3;
+    k.style.left=((j+1)/W*100)+'%';
+    k.setAttribute('aria-label',LETTERS[l3]+'is'+(FIRST_OCT+Math.floor(j/7)));
+    kb.appendChild(k);keyByMidi[m3]=k;
+  }
+
+  // --- dźwięk ---
+  var ctx=null, soundOn=true;
+  function play(midi){
+    if(!soundOn)return;
+    try{
+      if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();
+      if(ctx.state==='suspended')ctx.resume();
+      var t=ctx.currentTime, f=440*Math.pow(2,(midi-69)/12);
+      var g=ctx.createGain();g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.35,t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+1.1);
+      [['triangle',1,1],['sine',2,0.25]].forEach(function(p){
+        var o=ctx.createOscillator(),og=ctx.createGain();
+        o.type=p[0];o.frequency.value=f*p[1];og.gain.value=p[2];
+        o.connect(og);og.connect(g);o.start(t);o.stop(t+1.15);
+      });
+    }catch(e){}
+  }
+
+  // --- stan ---
+  var noteG=$('note'), msg=$('msg'), prog=$('prog'), staff=$('staff');
+  var mode='random', current=null, locked=false, sharps=false, octs={3:true,4:true,5:true};
+  // page: elementy widoczne na pięciolinii, każdy z pozycją x; idx: który jest do zagrania
+  var song=null, page=[], idx=0, pageStart=0, pageBars=[], curG=null, PAGE=8, VW=400, advTimer=null;
+
+  function say(text,cls){msg.className=cls||'';msg.textContent=text;}
+
+  // --- rysowanie ---
+  var SHARP=[[-2.5,-9,-2.5,10,1.2],[2.5,-10,2.5,9,1.2],[-5.5,-2,5.5,-5,2.4],[-5.5,5,5.5,2,2.4]];
+  var NATURAL=[[-3,-11,-3,5,1.2],[3,-5,3,11,1.2],[-3,-3,3,-5,2.4],[-3,5,3,3,2.4]];
+  function stemDown(n){return n.step>=(n.step>=28?34:22);}
+  function drawRest(g,dur,x){
+    if(dur>=4)g.appendChild(el('rect',{x:x-7,y:82,width:14,height:5,fill:'currentColor'}));
+    else if(dur>=2)g.appendChild(el('rect',{x:x-7,y:89,width:14,height:5,fill:'currentColor'}));
+    else if(dur>=1)g.appendChild(el('path',{d:'M'+(x-3)+' 80L'+(x+4)+' 89L'+(x-3)+' 97L'+(x+4)+' 106C'+(x-5)+' 101 '+(x-7)+' 109 '+x+' 114',
+      fill:'none',stroke:'currentColor','stroke-width':2.6,'stroke-linejoin':'round','stroke-linecap':'round'}));
+    else{
+      g.appendChild(el('circle',{cx:x-3,cy:90,r:2.8,fill:'currentColor'}));
+      g.appendChild(el('path',{d:'M'+(x-3)+' 92.5Q'+(x+3)+' 93 '+(x+5)+' 88L'+(x-1)+' 112',fill:'none',stroke:'currentColor','stroke-width':1.6,'stroke-linecap':'round'}));
+      if(dur<=0.25){
+        g.appendChild(el('circle',{cx:x-5.5,cy:100,r:2.8,fill:'currentColor'}));
+        g.appendChild(el('path',{d:'M'+(x-5.5)+' 102.5Q'+(x+0.5)+' 103 '+(x+2.4)+' 98',fill:'none',stroke:'currentColor','stroke-width':1.6,'stroke-linecap':'round'}));
+      }
+    }
+  }
+  // beam: {down, yAt(x)} gdy nuta należy do belki
+  function drawItem(it,cls,beam){
+    var g=el('g',{class:'n '+cls}), x=it.x;
+    if(it.rest){drawRest(g,it.dur,x);noteG.appendChild(g);return g;}
+    var n=it.n, y=yOf(n.step);
+    var ledg=[];
+    if(n.step===28)ledg.push(yOf(28));
+    if(n.step>=40)ledg.push(yOf(40));
+    ledg.forEach(function(ly){g.appendChild(el('line',{x1:x-13,x2:x+13,y1:ly,y2:ly,stroke:'currentColor','stroke-width':1.4}));});
+    var hollow=it.dur>=2, whole=it.dur>=4;
+    g.appendChild(el('ellipse',hollow
+      ?{cx:x,cy:y,rx:whole?7.6:6.8,ry:4.6,fill:'none',stroke:'currentColor','stroke-width':2,transform:'rotate(-22 '+x+' '+y+')'}
+      :{cx:x,cy:y,rx:7.6,ry:5.4,fill:'currentColor',transform:'rotate(-22 '+x+' '+y+')'}));
+    if(!whole){
+      var down=beam?beam.down:stemDown(n), sx=down?x-6.9:x+6.9;
+      var y1=beam?beam.yAt(sx):(down?y+37:y-37);
+      g.appendChild(el('line',{x1:sx,x2:sx,y1:down?y+1.5:y-1.5,y2:y1,stroke:'currentColor','stroke-width':1.6}));
+      if(!beam&&it.dur<1){
+        var cnt=it.dur<=0.25?2:1;
+        for(var f=0;f<cnt;f++){
+          var fy=y1+(down?-8:8)*f;
+          g.appendChild(el('path',{d:'M'+sx+' '+fy+(down?'c1 -9 11 -11 8 -23':'c1 9 11 11 8 23'),fill:'none',stroke:'currentColor','stroke-width':2,'stroke-linecap':'round'}));
+        }
+      }
+    }
+    if(it.dot)g.appendChild(el('circle',{cx:x+13,cy:n.step%2===0?y-6:y,r:2,fill:'currentColor'}));
+    if(it.acc){
+      var s=el('g',{stroke:'currentColor','stroke-linecap':'round',transform:'translate('+(x-19)+' '+y+')'});
+      (it.acc==='sharp'?SHARP:NATURAL).forEach(function(p){
+        s.appendChild(el('line',{x1:p[0],y1:p[1],x2:p[2],y2:p[3],'stroke-width':p[4]}));
+      });
+      g.appendChild(s);
+    }
+    noteG.appendChild(g);return g;
+  }
+  function makeBeam(run){
+    var sum=0;run.forEach(function(it){sum+=it.n.step;});
+    var treble=run[0].n.step>=28, down=sum/run.length>=(treble?34:22), d=down?1:-1;
+    function sx(it){return down?it.x-6.9:it.x+6.9;}
+    var a=run[0], z=run[run.length-1];
+    var yA=yOf(a.n.step)+34*d, yZ=yOf(z.n.step)+34*d;
+    if(yZ-yA>10){if(down)yA=yZ-10;else yZ=yA+10;}
+    if(yA-yZ>10){if(down)yZ=yA-10;else yA=yZ+10;}
+    var xA=sx(a), xZ=sx(z), shift=0;
+    function line(x){return yA+(yZ-yA)*(x-xA)/(xZ-xA);}
+    run.forEach(function(it){
+      var need=yOf(it.n.step)+26*d, ly=line(sx(it));
+      if(down){if(ly+shift<need)shift=need-ly;}else{if(ly+shift>need)shift=need-ly;}
+    });
+    var allDone=run.every(function(it){return it.done;});
+    var sixteenth=run.every(function(it){return it.dur<=0.25;});
+    var g=el('g',{class:'n'+(allDone?' done':'')});
+    for(var b=0;b<(sixteenth?2:1);b++){
+      var off=shift-d*7.5*b, t=-d*4.5;
+      g.appendChild(el('polygon',{fill:'currentColor',points:
+        xA+','+(line(xA)+off)+' '+xZ+','+(line(xZ)+off)+' '+xZ+','+(line(xZ)+off+t)+' '+xA+','+(line(xA)+off+t)}));
+    }
+    noteG.appendChild(g);
+    return {down:down,yAt:function(x){return line(x)+shift;}};
+  }
+  function draw(){
+    while(noteG.firstChild)noteG.removeChild(noteG.firstChild);
+    curG=null;current=page[idx]?page[idx].n:null;
+    var inSong=mode==='song'&&song&&song.items.length;
+    if(inSong){
+      if(pageStart===0){
+        [[93,117],[189,213]].forEach(function(ys){
+          noteG.appendChild(el('text',{class:'ts',x:99,y:ys[0],'text-anchor':'middle'})).textContent=song.ts[0];
+          noteG.appendChild(el('text',{class:'ts',x:99,y:ys[1],'text-anchor':'middle'})).textContent=song.ts[1];
+        });
+      }
+      pageBars.forEach(function(bx){noteG.appendChild(el('line',{class:'staff-line',x1:bx,x2:bx,y1:70,y2:214}));});
+      if(pageStart+page.length>=song.items.length){
+        noteG.appendChild(el('line',{class:'staff-line',x1:VW-31,x2:VW-31,y1:70,y2:214}));
+        noteG.appendChild(el('line',{class:'final-bar',x1:VW-25.5,x2:VW-25.5,y1:70,y2:214}));
+      }
+    }
+    page.forEach(function(it,i){it.done=i<idx;});
+    // belki: sąsiednie ósemki/szesnastki z tej samej grupy
+    var beams=[];
+    for(var i=0;i<page.length;){
+      var j=i;
+      if(page[i].beamKey!=null){while(j+1<page.length&&page[j+1].beamKey===page[i].beamKey)j++;}
+      if(j>i){var bm=makeBeam(page.slice(i,j+1));for(var q=i;q<=j;q++)beams[q]=bm;}
+      i=j+1;
+    }
+    page.forEach(function(it,i){
+      var g=drawItem(it,i<idx?'done':(i===idx?'cur':''),beams[i]);
+      if(i===idx)curG=g;
+    });
+    if(inSong){
+      var b1=page[0].bar+1, b2=page[page.length-1].bar+1;
+      prog.textContent=song.name+' · '+(b1===b2?'takt '+b1:'takty '+b1+'–'+b2)+' z '+song.bars;
+    }else prog.textContent='';
+  }
+
+  // nowa partia losowych nut (ćwierćnuty w równych odstępach)
+  function nextRandom(){
+    clearTimeout(advTimer);
+    var pool=notes.filter(function(n){return (sharps||!n.sharp)&&octs[Math.floor(n.step/7)];}), prev=null, n;
+    page=[];pageBars=[];
+    for(var i=0;i<PAGE;i++){
+      do{n=pool[Math.floor(Math.random()*pool.length)];}while(prev&&pool.length>1&&n.midi===prev.midi);
+      page.push({n:n,rest:false,dur:1,dot:false,acc:n.sharp?'sharp':null,beamKey:null,x:108+i*36});prev=n;
+    }
+    idx=0;locked=false;draw();
+  }
+  // partia melodii: tyle całych taktów, ile mieści się na pięciolinii
+  function slot(it){
+    var w=it.dur>=4?46:it.dur>=2?38:it.dur>=1?30:it.dur>=0.5?24:22;
+    if(it.dot)w+=6;return w;
+  }
+  function fixed(it){return it.acc?16:0;} // miejsce na krzyżyk lub kasownik, nie ściska się
+  function skipRests(){while(idx<page.length&&page[idx].rest)idx++;}
+  function loadSongPage(start){
+    clearTimeout(advTimer);
+    var items=song.items, x0=start===0?112:100, avail=VW-30-x0, MIN=0.82, GAP=10;
+    var end=start, width=0, fix=0;
+    while(end<items.length){
+      var be=end, bw=0, bf=0;
+      do{bw+=slot(items[be]);bf+=fixed(items[be]);be++;}while(be<items.length&&!items[be].barStart);
+      var add=(end>start?GAP:0)+bw;
+      if(end>start&&(width+add)*MIN+fix+bf>avail)break;
+      if(end===start&&bw*MIN+bf>avail){ // takt szerszy niż pięciolinia: dzielimy go
+        be=start;bw=0;bf=0;
+        while(be<items.length&&(bw+slot(items[be]))*MIN+bf+fixed(items[be])<=avail){bw+=slot(items[be]);bf+=fixed(items[be]);be++;}
+        if(be===start){be=start+1;bw=slot(items[start]);bf=fixed(items[start]);}
+        width=bw;fix=bf;end=be;break;
+      }
+      width+=add;fix+=bf;end=be;
+    }
+    var sc=(avail-fix)/width; if(sc>1.25)sc=1; if(sc<MIN)sc=MIN;
+    var cx=x0;pageBars=[];
+    page=items.slice(start,end);
+    page.forEach(function(it,i){
+      if(i>0&&it.barStart){pageBars.push(cx+GAP*sc/2);cx+=GAP*sc;}
+      it.x=cx+fixed(it)+9;cx+=fixed(it)+slot(it)*sc;
+    });
+    pageStart=start;idx=0;locked=false;skipRests();draw();
+  }
+
+  // --- gra ---
+  var ok=0, err=0, streak=0;
+  function flash(key,cls,ms){key.classList.add(cls);setTimeout(function(){key.classList.remove(cls);},ms);}
+  function press(key,fromMic){
+    var midi=+key.dataset.midi;
+    if(!fromMic)play(midi);
+    if(locked||!current||listening)return;
+    if(midi===current.midi){
+      ok++;streak++;
+      flash(key,'good',280);
+      say('Dobrze, to '+current.name,'good');
+      idx++;skipRests();draw();
+      if(idx>=page.length){
+        locked=true;
+        if(mode==='random')advTimer=setTimeout(nextRandom,500);
+        else if(pageStart+page.length>=song.items.length){
+          say('Brawo! Cała melodia zagrana. Zaczynamy od początku','good');
+          advTimer=setTimeout(function(){loadSongPage(0);},1600);
+        }else advTimer=setTimeout(function(){loadSongPage(pageStart+page.length);},500);
+      }
+    }else{
+      err++;streak=0;
+      flash(key,'bad',280);
+      var g=curG;if(g){g.classList.add('bad');setTimeout(function(){g.classList.remove('bad');},280);}
+      say((fromMic?'Słyszę ':'Zagrałeś ')+noteByMidi[midi].name+'. Spróbuj jeszcze raz','bad');
+    }
+    $('ok').textContent=ok;$('err').textContent=err;$('streak').textContent=streak;
+  }
+  kb.addEventListener('click',function(e){
+    var key=e.target.closest('.key');if(key)press(key);
+  });
+
+  // --- odsłuch melodii w rytmie ---
+  var listening=false, listenTimer=null;
+  function stopListen(){
+    listening=false;clearTimeout(listenTimer);$('bListen').setAttribute('aria-pressed','false');$('bListen').textContent='Posłuchaj';
+  }
+  function startListen(){
+    if(!song||!song.items.length)return;
+    listening=true;$('bListen').setAttribute('aria-pressed','true');$('bListen').textContent='Zatrzymaj';
+    loadSongPage(0);idx=0;draw();
+    (function step(){
+      if(!listening)return;
+      if(idx>=page.length){
+        if(pageStart+page.length>=song.items.length){stopListen();loadSongPage(0);say('Teraz Twoja kolej');return;}
+        loadSongPage(pageStart+page.length);idx=0;
+      }
+      var it=page[idx];
+      if(!it.rest){play(it.n.midi);flash(keyByMidi[it.n.midi],'hint',Math.min(300,it.dur*60000/song.bpm-40));}
+      idx++;draw();
+      listenTimer=setTimeout(step,it.dur*60000/song.bpm);
+    })();
+  }
+  $('bListen').addEventListener('click',function(){
+    if(listening){stopListen();loadSongPage(0);}else startListen();
+  });
+  $('bRestart').addEventListener('click',function(){stopListen();if(song&&song.items.length)loadSongPage(0);say('Od początku');});
+
+  // --- wybór melodii ---
+  var sel=$('songSel');
+  SONGS.forEach(function(s){var o=document.createElement('option');o.value=s.id;o.textContent=s.name;sel.appendChild(o);});
+  function loadCustomText(){try{return localStorage.getItem('nuty-wlasna')||'';}catch(e){return '';}}
+  function selectSong(){
+    stopListen();
+    var s=SONGS.filter(function(x){return x.id===sel.value;})[0];
+    var isCustom=s.id==='custom';
+    $('custom').hidden=!isCustom;
+    var text=isCustom?($('customText').value||loadCustomText()):s.n;
+    if(isCustom)$('customText').value=text;
+    song=buildSong(s,text);
+    if(song.items.length)loadSongPage(0);else{clearTimeout(advTimer);page=[];pageBars=[];idx=0;draw();}
+    if(isCustom&&song.bad.length)say('Nie rozumiem: '+song.bad.join(', '),'bad');
+    else if(!song.items.length)say('Wpisz nuty poniżej i naciśnij „Zapisz i graj”');
+    else say('Graj nuty po kolei. Niebieska to ta do zagrania');
+  }
+  sel.addEventListener('change',selectSong);
+  $('bSaveCustom').addEventListener('click',function(){
+    try{localStorage.setItem('nuty-wlasna',$('customText').value);}catch(e){}
+    selectSong();
+  });
+
+  // --- tryb ---
+  function setMode(m){
+    mode=m;stopListen();
+    $('mRandom').setAttribute('aria-pressed',m==='random');
+    $('mSong').setAttribute('aria-pressed',m==='song');
+    $('cRandom').hidden=m!=='random';
+    $('cSong').hidden=m!=='song';
+    if(m==='random'){$('custom').hidden=true;current=null;nextRandom();say('Graj nuty po kolei. Niebieska to ta do zagrania');}
+    else selectSong();
+  }
+  $('mRandom').addEventListener('click',function(){setMode('random');});
+  $('mSong').addEventListener('click',function(){setMode('song');});
+
+  // --- przełączniki ---
+  function toggle(btn,fn){
+    btn.addEventListener('click',function(){
+      var on=btn.getAttribute('aria-pressed')!=='true';
+      btn.setAttribute('aria-pressed',on);fn(on);
+    });
+  }
+  toggle($('tNames'),function(on){kb.classList.toggle('names',on);});
+  toggle($('tSharps'),function(on){sharps=on;nextRandom();});
+  toggle($('tSound'),function(on){soundOn=on;});
+  Array.prototype.forEach.call(document.querySelectorAll('.oct'),function(btn){
+    btn.addEventListener('click',function(){
+      var o=btn.dataset.oct, on=!octs[o];
+      if(!on&&Object.keys(octs).filter(function(k){return octs[k];}).length===1){
+        say('Przynajmniej jedna oktawa musi zostać włączona');return;
+      }
+      octs[o]=on;btn.setAttribute('aria-pressed',on);
+      nextRandom();
+    });
+  });
+  $('bHint').addEventListener('click',function(){
+    if(!current)return;
+    var key=keyByMidi[current.midi];
+    flash(key,'hint',900);
+    key.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+    say('To '+current.name);
+  });
+
+  // --- mikrofon: rozpoznawanie wysokości dźwięku z instrumentu ---
+  var micStream=null, micCtx=null, analyser=null, micBuf=null, micRaf=0;
+  var cand=-1, candCount=0, lastFired=-1, floorRms=0, armed=true;
+  // autokorelacja: zwraca częstotliwość podstawową albo -1, gdy cisza lub szum
+  function detectPitch(buf,sr){
+    var n=buf.length, rms=0, i, j;
+    for(i=0;i<n;i++)rms+=buf[i]*buf[i];
+    rms=Math.sqrt(rms/n);
+    if(rms<0.012)return {f:-1,rms:rms};
+    var maxLag=Math.min(n-2,Math.ceil(sr/110)), c=new Float32Array(maxLag+2);
+    for(i=0;i<=maxLag+1;i++){var sum=0;for(j=0;j<n-i;j++)sum+=buf[j]*buf[j+i];c[i]=sum;}
+    var d=0;while(d<maxLag&&c[d]>c[d+1])d++;
+    var maxv=-1,maxp=-1;
+    for(i=d;i<=maxLag;i++)if(c[i]>maxv){maxv=c[i];maxp=i;}
+    if(maxp<1||maxv<0.5*c[0])return {f:-1,rms:rms};
+    // pierwszy wyraźny szczyt zamiast najwyższego: chroni przed pomyłką o oktawę w dół
+    for(i=d+1;i<maxp;i++)if(c[i]>0.9*maxv&&c[i]>=c[i-1]&&c[i]>=c[i+1]){maxp=i;break;}
+    var x1=c[maxp-1],x2=c[maxp],x3=c[maxp+1],a=(x1+x3-2*x2)/2,b=(x3-x1)/2,T=maxp;
+    if(a)T=maxp-b/(2*a);
+    return {f:sr/T,rms:rms};
+  }
+  function micLabel(t){$('tMic').textContent=t?'Mikrofon · '+t:'Mikrofon';}
+  function micLoop(){
+    micRaf=requestAnimationFrame(micLoop);
+    analyser.getFloatTimeDomainData(micBuf);
+    var r=detectPitch(micBuf,micCtx.sampleRate);
+    if(r.f<0){cand=-1;candCount=0;armed=true;micLabel('');return;}
+    var mf=69+12*Math.log(r.f/440)/Math.LN2, midi=Math.round(mf);
+    if(Math.abs(mf-midi)>0.4||!keyByMidi[midi]){cand=-1;candCount=0;return;}
+    if(midi===cand)candCount++;else{cand=midi;candCount=1;}
+    micLabel(noteByMidi[midi].name);
+    if(!armed){
+      // ta sama nuta liczy się ponownie dopiero po nowym uderzeniu (skok głośności)
+      if(midi!==lastFired&&candCount>=2)armed=true;
+      else if(r.rms>floorRms*1.6)armed=true;
+      floorRms=Math.min(floorRms,r.rms);
+    }
+    var need=(current&&midi===current.midi)?3:7; // błędną nutę uznajemy dopiero, gdy brzmi dłużej
+    if(armed&&candCount>=need&&!locked&&!listening){
+      armed=false;lastFired=midi;floorRms=r.rms;
+      press(keyByMidi[midi],true);
+    }
+  }
+  function micStop(){
+    cancelAnimationFrame(micRaf);
+    if(micStream)micStream.getTracks().forEach(function(t){t.stop();});
+    if(micCtx)try{micCtx.close();}catch(e){}
+    micStream=micCtx=analyser=null;micLabel('');$('tMic').setAttribute('aria-pressed','false');
+  }
+  $('tMic').addEventListener('click',function(){
+    if(micStream){micStop();say('Mikrofon wyłączony');return;}
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+      say('Mikrofon niedostępny. Strona musi być otwarta przez https','bad');return;
+    }
+    // kontekst audio tworzymy od razu w kliknięciu, inaczej Safari na iPadzie go nie uruchomi
+    var actx=new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();
+    navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}).then(function(stream){
+      micStream=stream;micCtx=actx;
+      if(micCtx.state==='suspended')micCtx.resume();
+      analyser=micCtx.createAnalyser();analyser.fftSize=2048;
+      micBuf=new Float32Array(analyser.fftSize);
+      micCtx.createMediaStreamSource(stream).connect(analyser);
+      cand=-1;candCount=0;armed=true;
+      $('tMic').setAttribute('aria-pressed','true');
+      say('Mikrofon włączony. Zagraj nutę na instrumencie');
+      micLoop();
+    }).catch(function(){
+      try{actx.close();}catch(e){}
+      say('Nie udało się włączyć mikrofonu. Sprawdź zgodę na mikrofon w przeglądarce','bad');
+    });
+  });
+
+  // --- szerokość pięciolinii dopasowana do ekranu ---
+  var laidOut=false;
+  function layout(reload){
+    var r=staff.getBoundingClientRect(); if(!r.width||!r.height)return;
+    var w=Math.max(400,Math.min(760,Math.round(192*r.width/r.height)));
+    if(w===VW&&laidOut)return;
+    laidOut=true;VW=w;staff.setAttribute('viewBox','0 40 '+w+' 192');
+    Array.prototype.forEach.call(lines.childNodes,function(ln){ln.setAttribute('x2',w-24);});
+    $('endBar').setAttribute('x1',w-24);$('endBar').setAttribute('x2',w-24);
+    PAGE=Math.max(4,Math.min(16,Math.floor((w-138)/36)+1));
+    if(!reload)return;
+    if(mode==='random')nextRandom();
+    else if(song&&song.items.length&&!listening)loadSongPage(pageStart);
+  }
+  layout(false);
+  window.addEventListener('resize',function(){layout(true);});
+
+  nextRandom();
+})();
+</script>
+</body>
+</html>
